@@ -7,6 +7,7 @@ import ipywidgets as ipw
 from IPython.display import display, clear_output
 import numpy as np
 from pprint import pformat as pf
+from altair import datum
 
 def read_data():
     with open(os.path.join("/","home","shared","mimic_data", "timeseries_detailed.feather"), "rb") as f0:
@@ -81,16 +82,18 @@ def prep_data(cdata):
 
     chart_events = aggregate_merge_events(chart_events)
     io_events = aggregate_merge_events(io_events)
-    return chart_events, note_events, io_events, other_events
+    return pd.concat([chart_events, note_events, io_events, other_events], axis=0, sort=False)
 
-def get_graph(chart_events, note_events, io_events, other_events):
+def get_graph(events):
+
+    MARK_SIZE=100
     selection = alt.selection_interval(bind='scales',
                                    resolve='global')
     color_provider = alt.Color('provider:N')
-    cce = alt.Chart(chart_events).mark_circle(
+    cce = alt.Chart(events).mark_circle(
         opacity=0.4,
         stroke='black',
-        size=80,
+        size=MARK_SIZE,
         strokeWidth=1
     ).encode(
         alt.X('event_time:T', axis=alt.Axis(labelAngle=45)),
@@ -102,14 +105,15 @@ def get_graph(chart_events, note_events, io_events, other_events):
         height=300
     ).add_selection(
         selection
-    )
+    ).transform_filter(datum.mimic_category == "chart_events")
 
 
-    cio = alt.Chart(io_events).mark_circle(
+
+    cio = alt.Chart(events).mark_circle(
         opacity=0.4,
         stroke='black',
         strokeWidth=1,
-        size=80
+        size=MARK_SIZE
     ).encode(
         alt.X('event_time:T', axis=alt.Axis(labelAngle=45)),
         alt.Y('sub_category:N', axis=alt.Axis(labelAngle=-25)),
@@ -120,18 +124,17 @@ def get_graph(chart_events, note_events, io_events, other_events):
         height=300
     ).add_selection(
         selection
-    )
-    note_events["size"] = np.log2(
-        note_events.detail.apply(lambda r: len(r))+1)
-    cne = alt.Chart(note_events).mark_circle(
+    ).transform_filter(datum.mimic_category == "io_events")
+    
+
+    cne = alt.Chart(events).mark_circle(
         opacity=0.4,
         stroke='black',
-        strokeWidth=1
+        strokeWidth=1,
+        size=MARK_SIZE,
     ).encode(
         alt.X('event_time:T', axis=alt.Axis(labelAngle=45)),
         alt.Y('sub_category:N', axis=alt.Axis(labelAngle=-25)),
-        alt.Size('size:Q',
-                legend=None),
         color=color_provider,
         tooltip=["detail", "location", "provider"]
     ).properties(
@@ -139,28 +142,30 @@ def get_graph(chart_events, note_events, io_events, other_events):
         height=125
     ).add_selection(
         selection
-    )
+    ).transform_filter(datum.mimic_category == "note_events")
 
-    cot=alt.Chart(other_events).mark_circle(
+    cot=alt.Chart(events).mark_circle(
         opacity=0.4,
         stroke='black',
         strokeWidth=1,
-        size=80,
+        size=MARK_SIZE,
     ).encode(
         alt.X('event_time:T', axis=alt.Axis(labelAngle=45)),
         alt.Y('mimic_category:N', axis=alt.Axis(labelAngle=-25)),
         color=color_provider,
-        tooltip=["key_value", "detail"]
+        tooltip=["key_value", "detail", "provider"]
     ).properties(
         width=850,
         height=125
     ).add_selection(
         selection
-    )
+    ).transform_filter((datum.mimic_category == "microbiology_events") | 
+                       (datum.mimic_category == "med_events") |
+                       (datum.mimic_category == "procedure_events"))
 
     plt = alt.vconcat(cce,cio,cne,cot)
     return plt
 
 def plot_case(cdata):
-    return get_graph(*prep_data(cdata))
+    return get_graph(prep_data(cdata))
 
