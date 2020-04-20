@@ -12,6 +12,8 @@ from altair import datum
 def read_data():
     with open(os.path.join("/","home","shared","mimic_data", "timeseries_detailed.feather"), "rb") as f0:
         case_data = pa.deserialize(f0.read())
+        # delete case 17805 not working for unknownr reason
+        del case_data[17805]
     return case_data
 
 
