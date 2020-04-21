@@ -1,7 +1,6 @@
 from IPython.display import clear_output, display, HTML
 import ipywidgets as ipw
 import numpy as np
-import warnings
 import io
 import os
 import pyarrow as pa
@@ -65,7 +64,11 @@ def get_column_options(data):
 
 def plt_nominal(df, vizvar):
     du("plt_nominal")
-    tmp = {k:df[k].value_counts().to_frame().reset_index().rename(columns={"index":vizvar, k:"counts"}) for k in df.keys()}
+    if fillna.value == "Yes":
+        tmp = {k:df[k].fillna("Missing").value_counts().to_frame().reset_index().rename(columns={"index":vizvar, k:"counts"}) for k in df.keys()}
+    else:
+        tmp = {k:df[k].value_counts().to_frame().reset_index().rename(columns={"index":vizvar, k:"counts"}) for k in df.keys()}
+
 
     for k,v in tmp.items():
         v["subject"] = k
@@ -99,7 +102,8 @@ def plt_numeric(df, vizvar):
         x='%s:Q'%vizvar,
         y='density:Q',
         color=alt.Color('Subject:N')
-    )
+    ).properties(width=GRAPH_WIDTH,
+                 height=GRAPH_HEIGHT)
     return c0
 
 def tidy_data(data, cases, dfilter, dfilter_value, pop):
@@ -110,7 +114,8 @@ def tidy_data(data, cases, dfilter, dfilter_value, pop):
         du("filer by value")
         tmp = tmp[tmp[dfilter]==dfilter_value]
 
-    return pd.DataFrame.from_dict({k:tmp[tmp.subject_id==k][pop].to_list() for k in cases}, orient='index').T.rename(columns={k:str(k) for k in cases})
+    return pd.DataFrame.from_dict({k:tmp[tmp.subject_id==k][pop].to_list() for k in cases},
+                                  orient='index').T.rename(columns={k:str(k) for k in cases})
 
 def get_plts():
     du("get_plts")
@@ -211,7 +216,8 @@ def init_view():
 
 def on_reset(b):
     init_view()
-
+def update_fill(change):
+    plt_data()
 ## Readin Data
 
 all_data = read_data()
@@ -236,6 +242,14 @@ filter_select = ipw.Dropdown()
 viz_select = ipw.Dropdown()
 reset = ipw.Button(decription="Reset", layout=ipw.Layout(width="100%", align="center"))#,  button_style='danger')
 reset.style.button_color = 'lightgreen'
+fillna = ipw.ToggleButtons(
+    options=['Yes', "No"],
+    description='Missing',
+    disabled=False,
+    button_style='', # 'success', 'info', 'warning', 'danger' or ''
+    tooltips=['Missing categorial values will be replaced with "Missing"', 'Missing values will be ignored'],
+#     icons=['check'] * 3
+)
 
 ### Define label widgets
 
@@ -253,6 +267,8 @@ filter_select.observe(update_filter, names="value", type="change")
 viz_select.observe(update_viz, names="value", type="change")
 slice_select.observe(update_slice, names="value", type="change")
 reset.on_click(on_reset)
+fillna.observe(update_fill, names="value", type="change")
+
 
 aexplore_mimic = ipw.TwoByTwoLayout(
         top_left=ipw.VBox([reset,
@@ -266,16 +282,18 @@ aexplore_mimic = ipw.TwoByTwoLayout(
                            layout=ipw.Layout(width='100%',
                                              min_height='200px',
                                              border="solid")),
-        bottom_left=ipw.HBox([plots_out1]), layout=ipw.Layout(width="100%"))
+        bottom_left=ipw.HBox([ipw.VBox([fillna,plots_out1])], layout=ipw.Layout(width="100%")))
 
 debug_out = ipw.Output()
 _debug = ipw.Label(value="")
 
-descriptions = ipw.Tab()
-children = [ipw.HTML(value=markdown(table_text[t])) for t in table_options]
-children.append(ipw.HTML(drg))
-tmp = table_options[:]
-tmp.append("DRG")
-for i in range(len(tmp)):
-    descriptions.set_title(i,tmp[i])
-descriptions.children = children
+def make_description():
+    descriptions = ipw.Tab()
+    children = [ipw.HTML(value=markdown(table_text[t])) for t in table_options]
+    children.append(ipw.HTML(drg))
+    tmp = table_options[:]
+    tmp.append("DRG")
+    for i in range(len(tmp)):
+        descriptions.set_title(i,tmp[i])
+    descriptions.children = children
+    return descriptions
