@@ -3,7 +3,6 @@ import os
 import pyarrow as pa
 import pandas as pd
 import altair as alt
-import ipywidgets as ipw
 from IPython.display import display, clear_output
 import numpy as np
 from pprint import pformat as pf
@@ -62,7 +61,7 @@ def aggregate_merge_events(_df):
             cat = "Other"
         else:
             df = _df[_df.sub_category == cat]
-        tmp = [df[df.event_time==t] 
+        tmp = [df[df.event_time==t]
                   for t in df.event_time.unique()]
         rslts.extend([aggregate_events(t, cat)
                          for t in tmp])
@@ -127,7 +126,7 @@ def get_graph(events):
     ).add_selection(
         selection
     ).transform_filter(datum.mimic_category == "io_events")
-    
+
 
     cne = alt.Chart(events).mark_circle(
         opacity=0.4,
@@ -161,7 +160,7 @@ def get_graph(events):
         height=125
     ).add_selection(
         selection
-    ).transform_filter((datum.mimic_category == "microbiology_events") | 
+    ).transform_filter((datum.mimic_category == "microbiology_events") |
                        (datum.mimic_category == "med_events") |
                        (datum.mimic_category == "procedure_events"))
 
@@ -170,4 +169,3 @@ def get_graph(events):
 
 def plot_case(cdata):
     return get_graph(prep_data(cdata))
-

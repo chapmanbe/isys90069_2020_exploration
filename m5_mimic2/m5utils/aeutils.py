@@ -10,6 +10,7 @@ from collections import defaultdict
 from . description import drg, table_text
 from . import cases, CASE_DATADIR
 from markdown import markdown
+alt.renderers.enable('mimetype')
 
 
 GRAPH_WIDTH=800
@@ -119,12 +120,15 @@ def get_plts(df):
 
 @histo_out.capture(clear_output=True)
 def draw_plot(c):
+    display(c)
+
+@histo_out.capture(clear_output=True)
+def _draw_plot(c):
     with io.StringIO() as f:
         c.save(f, format="html")
         f.seek(0)
         html1 = f.read()
     display(HTML(html1))
-
 def plt_data():
     df = tidy_data(all_data[table_select.value],
                    case_select.value,

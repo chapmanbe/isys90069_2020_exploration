@@ -11,6 +11,7 @@ import pandas as pd
 import altair as alt
 from . description import drg, table_text
 from . import cases, CASE_DATADIR
+alt.renderers.enable('mimetype')
 
 GRAPH_WIDTH=400
 GRAPH_HEIGHT=300
@@ -101,13 +102,17 @@ def get_plts(df):
 
 
 @em_plots_out1.capture(clear_output=True)
-def draw_plot(c):
+def _draw_plot(c):
 
     with io.StringIO() as f:
         c.save(f, format="html")
         f.seek(0)
         html1 = f.read()
     display(HTML(html1))
+@em_plots_out1.capture(clear_output=True)
+def draw_plot(c):
+    display(c)
+
 
 def plt_data():
     df = em_case_data[em_case_select.value][em_table_select.value]
