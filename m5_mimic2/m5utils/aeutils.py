@@ -8,23 +8,19 @@ import pandas as pd
 import altair as alt
 from collections import defaultdict
 from . description import drg, table_text
+from . import cases, CASE_DATADIR
 from markdown import markdown
 
 
-DATADIR = "/home/shared/mimic_data/case_level"
 GRAPH_WIDTH=800
 GRAPH_HEIGHT=300
 global_debugs = {}
-cases = (21372, 14125, 22498, 10299,
-         2284, 15239, 4727, 8292, 9969,
-         17805, 1766, 29839, 29657, 11401,
-         19754, 4785, 19847, 6973, 27421, 18514)
 
-
-debug_out = ipw.Output()
-_debug = ipw.Label(value="")
-def du(msg):
-    _debug.value = _debug.value + " " +msg
+table_out = ipw.Output()
+counts_out = ipw.Output()
+histo_out = ipw.Output(layout=ipw.Layout(width="100%", min_height="%dpix"%(GRAPH_HEIGHT+50),
+                                                        max_height="%dpix"%(GRAPH_HEIGHT+100),
+                                         border="solid", align="center"))
 
 def read_data():
     def concat_data(case_data):
@@ -36,7 +32,7 @@ def read_data():
     case_data = {}
     fails = []
     for c in cases:
-        with open(os.path.join(DATADIR,"%d.feather"%c), "rb") as f0:
+        with open(os.path.join(CASE_DATADIR,"%d.feather"%c), "rb") as f0:
             try:
                 case_data[c] = pa.deserialize(f0.read())
             except pa.ArrowInvalid:
@@ -63,7 +59,6 @@ def get_column_options(data):
     return column_options
 
 def plt_nominal(df, vizvar):
-    du("plt_nominal")
     if fillna.value == "Yes":
         tmp = {k:df[k].fillna("Missing").value_counts().to_frame().reset_index().rename(columns={"index":vizvar, k:"counts"}) for k in df.keys()}
     else:
@@ -76,7 +71,7 @@ def plt_nominal(df, vizvar):
 
     c = alt.Chart(tmp).mark_bar().encode(
             x='sum(counts):Q',
-            y=alt.X('%s:N'%vizvar, axis=alt.Axis(labelAngle=45)),
+            y=alt.Y('%s:N'%vizvar, axis=alt.Axis(labelAngle=45)),
             color=alt.Color('subject:N')
     ).properties(width=GRAPH_WIDTH,
                         height=GRAPH_HEIGHT)
@@ -84,7 +79,6 @@ def plt_nominal(df, vizvar):
 
 
 def plt_numeric(df, vizvar):
-    du("plt_numeric")
 
     c0 = alt.Chart(df.dropna()).transform_fold(
         list(df.columns),
@@ -107,55 +101,47 @@ def plt_numeric(df, vizvar):
     return c0
 
 def tidy_data(data, cases, dfilter, dfilter_value, pop):
-    du(str(cases))
     tmp = data[data["subject_id"].isin(cases)]
-    du(str(tmp.shape))
     if dfilter_value :
-        du("filer by value")
         tmp = tmp[tmp[dfilter]==dfilter_value]
 
     return pd.DataFrame.from_dict({k:tmp[tmp.subject_id==k][pop].to_list() for k in cases},
                                   orient='index').T.rename(columns={k:str(k) for k in cases})
 
-def get_plts():
-    du("get_plts")
+def get_plts(df):
 
-    df = tidy_data(all_data[table_select.value], case_select.value, column_select.value, filter_select.value, viz_select.value)
-    du("got tidy")
-    _debug.value = ""
-    global_debugs["get_plts_df"] = df.copy()
-    du(str(df.dtypes))
+
     if df.dtypes[0] in {np.dtype("float64")}:
-        c1 = plt_numeric(df, viz_select.value)
+        return plt_numeric(df, viz_select.value)
     else:
-        c1 = plt_nominal(df, viz_select.value)
-    return c1
+        return plt_nominal(df, viz_select.value)
 
+
+@histo_out.capture(clear_output=True)
 def draw_plot(c):
-    du("draw_plot")
     with io.StringIO() as f:
         c.save(f, format="html")
         f.seek(0)
         html1 = f.read()
-    with plots_out1:
-        display(HTML(html1))
+    display(HTML(html1))
 
 def plt_data():
-    du("plt_data\n")
-    c = get_plts()
+    df = tidy_data(all_data[table_select.value],
+                   case_select.value,
+                   column_select.value,
+                   filter_select.value,
+                   viz_select.value)
+    c = get_plts(df)
     draw_plot(c)
 
+@table_out.capture(clear_output=True)
 def view_table():
-    du("view_table")
     df = all_data[table_select.value]
     df= df[df.subject_id.isin(case_select.value)]
     vs = slice_select.value
-    with table_out:
-        clear_output()
-        display(df[vs:vs+5])
+    display(df[vs:vs+5])
 
 def comp_view_max():
-    du("comp_view_max")
     df = all_data[table_select.value]
     return max(0,df[df.subject_id.isin(case_select.value)].shape[0]-5)
 
@@ -163,23 +149,19 @@ def update_view_max():
     slice_select.max = comp_view_max()
 
 def update_table(change):
-    #du("update_table")
     table = change.new
     update_case(change)
     #view_table()
     #plt_data()
 
 def update_case(change):
-    #du("update_case")
     update_view_max()
     column_select.options = column_options[table_select.value]
-    du("updated column options")
     view_table()
     update_column(change)
 
 
 def set_columns():
-    #du("set_columns")
     df = all_data[table_select.value]
     df = df[df.subject_id.isin(case_select.value)]
     col = column_select.value
@@ -192,9 +174,7 @@ def set_columns():
     filter_select.options = cslabels
 
 def update_column(change):
-    #du("update_column")
     set_columns()
-
     plt_data()
 
 def update_filter(change):
@@ -211,8 +191,7 @@ def init_view():
     table_select.value = table_options[0]
     column_select.options = column_options[table_select.value]
     set_columns()
-    view_table()
-    plt_data()
+
 
 def on_reset(b):
     init_view()
@@ -227,11 +206,7 @@ column_options = get_column_options(all_data)
 
 ## Define Widgets
 
-table_out = ipw.Output()
-counts_out = ipw.Output()
-plots_out1 = ipw.Output(layout=ipw.Layout(width="100%", min_height="%dpix"%(GRAPH_HEIGHT+50),
-                                                        max_height="%dpix"%(GRAPH_HEIGHT+100),
-                                         border="solid", align="center"))
+
 
 case_select = ipw.SelectMultiple(options = case_options, value=[case_options[0]])
 table_select = ipw.Dropdown(options = table_options)
@@ -270,22 +245,21 @@ reset.on_click(on_reset)
 fillna.observe(update_fill, names="value", type="change")
 
 
-aexplore_mimic = ipw.TwoByTwoLayout(
-        top_left=ipw.VBox([reset,
-                           ipw.HBox([ipw.VBox([cw, case_select]),
-                                     ipw.VBox([tw, table_select]),
-                                     ipw.VBox([fw, column_select]),
-                                     ipw.VBox([vw, filter_select]),
-                                     ipw.VBox([pw, viz_select])]),
-                           slice_select,
-                           table_out],
-                           layout=ipw.Layout(width='100%',
-                                             min_height='200px',
-                                             border="solid")),
-        bottom_left=ipw.HBox([ipw.VBox([fillna,plots_out1])], layout=ipw.Layout(width="100%")))
-
-debug_out = ipw.Output()
-_debug = ipw.Label(value="")
+def get_explorer():
+    return ipw.TwoByTwoLayout(
+            top_left=ipw.VBox([reset,
+                               ipw.HBox([ipw.VBox([cw, case_select]),
+                                         ipw.VBox([tw, table_select]),
+                                         ipw.VBox([fw, column_select]),
+                                         ipw.VBox([vw, filter_select]),
+                                         ipw.VBox([pw, viz_select])]),
+                               slice_select,
+                               table_out],
+                               layout=ipw.Layout(width='100%',
+                                                 min_height='200px',
+                                                 border="solid")),
+            bottom_left=ipw.HBox([ipw.VBox([fillna, histo_out])],
+                                           layout=ipw.Layout(width="100%")))
 
 def make_description():
     descriptions = ipw.Tab()
