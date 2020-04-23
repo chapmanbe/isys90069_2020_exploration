@@ -11,7 +11,7 @@ from .description import drg, table_text
 from . import cases, CASE_DATADIR
 from markdown import markdown
 
-alt.renderers.enable("mimetype")
+# alt.renderers.enable("mimetype")
 
 _debug = ipw.Label(value="")
 

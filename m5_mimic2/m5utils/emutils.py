@@ -12,7 +12,7 @@ import altair as alt
 from .description import drg, table_text
 from . import cases, CASE_DATADIR
 
-alt.renderers.enable("mimetype")
+# alt.renderers.enable("mimetype")
 
 GRAPH_WIDTH = 400
 GRAPH_HEIGHT = 300
@@ -145,7 +145,7 @@ def plt_data():
     df = em_case_data[em_case_select.value][em_table_select.value]
     df = df[df[em_column_select.value] == em_filter_select.value]
     try:
-        df = df.sort_values(by ="event_time")
+        df = df.sort_values(by="event_time")
     except:
         pass
 
