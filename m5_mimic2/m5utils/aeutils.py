@@ -12,6 +12,9 @@ from . import cases, CASE_DATADIR
 from markdown import markdown
 alt.renderers.enable('mimetype')
 
+_debug = ipw.Label(value="")
+def du(msg):
+    _debug.value = _debug.value + " " + msg
 
 GRAPH_WIDTH=800
 GRAPH_HEIGHT=300
@@ -61,34 +64,40 @@ def get_column_options(data):
 
 def plt_nominal(df, vizvar):
     if fillna.value == "Yes":
-        tmp = {k:df[k].fillna("Missing").value_counts().to_frame().reset_index().rename(columns={"index":vizvar, k:"counts"}) for k in df.keys()}
+        tmp = df.fillna("Missing")
     else:
-        tmp = {k:df[k].value_counts().to_frame().reset_index().rename(columns={"index":vizvar, k:"counts"}) for k in df.keys()}
+        tmp = df
 
-
+    tmp = {s:tmp[tmp.subject_id==s][vizvar].value_counts(
+                                         ).to_frame(
+                                         ).reset_index(
+                                         ).rename(
+                                         columns={"index":vizvar,
+                                                  vizvar:"counts"})
+           for s in df.subject_id.unique()}
     for k,v in tmp.items():
-        v["subject"] = k
-    tmp = pd.concat(tmp.values(), axis=0, sort=True).fillna(0)
+        v["subject_id"] = k
+    try:
+        tmp = pd.concat(tmp.values())
+    except:
+        tmp = pd.DataFrame(columns=["subject_id", "counts", vizvar])
 
     c = alt.Chart(tmp).mark_bar().encode(
             x='sum(counts):Q',
             y=alt.Y('%s:N'%vizvar, axis=alt.Axis(labelAngle=45)),
-            color=alt.Color('subject:N')
+            color=alt.Color('subject_id:N')
     ).properties(width=GRAPH_WIDTH,
                         height=GRAPH_HEIGHT)
     return c
 
 
 def plt_numeric(df, vizvar):
-
-    c0 = alt.Chart(df.dropna()).transform_fold(
-        list(df.columns),
-        as_=['Subject', vizvar]
-    ).transform_filter(
-        'isValid(datum.Subject)'
+    du("in plt_numeric")
+    c0 = alt.Chart(df).transform_filter(
+        'isValid(datum.subject_id)'
     ).transform_density(
         vizvar,
-        groupby=['Subject'],
+        groupby=['subject_id'],
         as_=[vizvar, 'density'],
         counts=False
     ).mark_area(
@@ -96,7 +105,7 @@ def plt_numeric(df, vizvar):
     ).encode(
         x='%s:Q'%vizvar,
         y='density:Q',
-        color=alt.Color('Subject:N')
+        color= alt.Color('subject_id:N')
     ).properties(width=GRAPH_WIDTH,
                  height=GRAPH_HEIGHT)
     return c0
@@ -105,14 +114,13 @@ def tidy_data(data, cases, dfilter, dfilter_value, pop):
     tmp = data[data["subject_id"].isin(cases)]
     if dfilter_value :
         tmp = tmp[tmp[dfilter]==dfilter_value]
-
-    return pd.DataFrame.from_dict({k:tmp[tmp.subject_id==k][pop].to_list() for k in cases},
-                                  orient='index').T.rename(columns={k:str(k) for k in cases})
-
+    return tmp[["subject_id", pop]]
 def get_plts(df):
 
-
-    if df.dtypes[0] in {np.dtype("float64")}:
+    du("cat_qua=%s"%cat_qua.value)
+    #if cat_qua.value == "Quantitative":
+    if df.dtypes[viz_select.value] in {np.dtype("float64")}:
+        du("plotting numeric")
         return plt_numeric(df, viz_select.value)
     else:
         return plt_nominal(df, viz_select.value)
@@ -201,6 +209,9 @@ def on_reset(b):
     init_view()
 def update_fill(change):
     plt_data()
+
+def update_mode(change):
+    plt_data()
 ## Readin Data
 
 all_data = read_data()
@@ -229,7 +240,14 @@ fillna = ipw.ToggleButtons(
     tooltips=['Missing categorial values will be replaced with "Missing"', 'Missing values will be ignored'],
 #     icons=['check'] * 3
 )
-
+cat_qua = ipw.ToggleButtons(
+    options=['Categorical', "Quantitative"],
+    description='',
+    disabled=False,
+    button_style='', # 'success', 'info', 'warning', 'danger' or ''
+    tooltips=['Plot data as categorical values', 'Plot data as quantitative values'],
+#     icons=['check'] * 3
+)
 ### Define label widgets
 
 cw = ipw.Label(value="Select case")
@@ -247,6 +265,7 @@ viz_select.observe(update_viz, names="value", type="change")
 slice_select.observe(update_slice, names="value", type="change")
 reset.on_click(on_reset)
 fillna.observe(update_fill, names="value", type="change")
+cat_qua.observe(update_mode, names="value", type="change")
 
 
 def get_explorer():
@@ -262,7 +281,7 @@ def get_explorer():
                                layout=ipw.Layout(width='100%',
                                                  min_height='200px',
                                                  border="solid")),
-            bottom_left=ipw.HBox([ipw.VBox([fillna, histo_out])],
+            bottom_left=ipw.HBox([ipw.VBox([ipw.HBox([fillna]), histo_out])],
                                            layout=ipw.Layout(width="100%")))
 
 def make_description():
